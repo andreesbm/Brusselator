@@ -1,10 +1,10 @@
 {
-    "resolution": 128,
+    "resolution": 512,
     "frame_rate": 24,
-    "oscillation_period": 2,
+    "oscillation_period": 10,
     "num_oscillations": 10,
     "color_vmin": 0,
-    "color_vmax": 5,
+    "color_vmax": 3,
     "u_color": "Reds",
     "v_color": "Blues",
     "modes": [

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
 
 # Load settings from external JSON file
-with open('settings.json', 'r') as f:
+with open('c:/Users/Ott/Brusselator/settings.json', 'r') as f:
     settings = json.load(f)
 
 # Constants from settings
@@ -121,8 +121,8 @@ for mode in modes:
         ax.text(-RADIUS + 5, -RADIUS + 5, params_text, ha='left', va='bottom', 
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
         
-        # Add description below the plot with some distance
-        plt.figtext(0.5, -0.1, description, ha="center", fontsize=10, wrap=True)
+        # Add description below the plot
+        plt.figtext(-RADIUS - 5, -RADIUS + 5, description, ha="center", fontsize=10, wrap=True)
 
         # Save the frame
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
