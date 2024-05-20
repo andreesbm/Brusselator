@@ -1,0 +1,49 @@
+{
+    "resolution": 128,
+    "frame_rate": 24,
+    "oscillation_period": 2,
+    "num_oscillations": 10,
+    "color_vmin": 0,
+    "color_vmax": 5,
+    "u_color": "Reds",
+    "v_color": "Blues",
+    "modes": [
+      {
+        "title": "Stable Steady State",
+        "a": 1,
+        "b": 1,
+        "d0": 1,
+        "d1": 0.1,
+        "filename": "stable_steady_state.avi",
+        "description": "b < a^2 + 1\nBehavior: The system reaches a stable steady state without oscillations."
+      },
+      {
+        "title": "Oscillatory Behavior (Hopf Bifurcation)",
+        "a": 1,
+        "b": 3,
+        "d0": 1,
+        "d1": 0.1,
+        "filename": "oscillatory_behavior.avi",
+        "description": "b > a^2 + 1\nBehavior: The system exhibits sustained oscillations."
+      },
+      {
+        "title": "Pattern Formation (Turing Instability)",
+        "a": 1,
+        "b": 2,
+        "d0": 1,
+        "d1": 0.01,
+        "filename": "pattern_formation.avi",
+        "description": "b > a^2 + 1 and η = d1/d0 > 1 + a^2 - b/a^2\nBehavior: The system forms spatial patterns due to diffusion-driven instability."
+      },
+      {
+        "title": "Critical Point (Threshold of Oscillations)",
+        "a": 1,
+        "b": 2,
+        "d0": 1,
+        "d1": 0.1,
+        "filename": "critical_point.avi",
+        "description": "b = a^2 + 1\nBehavior: The system is at the threshold of oscillations."
+      }
+    ]
+  }
+  
