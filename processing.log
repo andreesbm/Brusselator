@@ -104,3 +104,38 @@
 2024-05-21 14:57:40,418 - INFO - Parse sympy expression `-u**2*v + 2*u + 0.01*laplace(v, none, bc_args)`
 2024-05-21 14:57:52,505 - INFO - Init explicit Euler stepper with dt=1e-05
 2024-05-21 14:57:52,505 - INFO - Compile `modify_after_step` with parallel=False
+2024-05-21 15:01:57,565 - INFO - Simulation finished at t=10.0.
+2024-05-21 15:02:06,801 - INFO - Finished processing mode Pattern Formation (Turing Instability)
+2024-05-21 15:02:07,137 - INFO - Video saved to results\18\pattern_formation.mp4
+2024-05-21 15:02:07,137 - INFO - Starting mode Critical Point (Threshold of Oscillations)
+2024-05-21 15:02:07,195 - INFO - Using boundary condition `auto_periodic_neumann` for operator `laplace` in PDE for `u`
+2024-05-21 15:02:07,195 - INFO - Compile `laplace` with parallel=False
+2024-05-21 15:02:07,195 - INFO - Compile `set_valid` with parallel=False
+2024-05-21 15:02:07,195 - INFO - Compile `virtual_point` with parallel=False
+2024-05-21 15:02:07,195 - INFO - Compile `virtual_point` with parallel=False
+2024-05-21 15:02:07,201 - INFO - Compile `virtual_point` with parallel=False
+2024-05-21 15:02:07,201 - INFO - Compile `virtual_point` with parallel=False
+2024-05-21 15:02:07,202 - INFO - Compile `set_valid_bcs` with parallel=False
+2024-05-21 15:02:07,202 - INFO - Compile `apply_op_compiled` with parallel=False
+2024-05-21 15:02:07,202 - INFO - RHS for `u` has signature ('u', 'v', 't', 'none', 'bc_args')
+2024-05-21 15:02:07,202 - INFO - Compile `_heaviside_implemention` with parallel=False
+2024-05-21 15:02:07,202 - INFO - Parse sympy expression `u**2*v - 3*u + laplace(u, none, bc_args) + 1`
+2024-05-21 15:02:07,202 - INFO - Compile `_lambdifygenerated` with parallel=False
+2024-05-21 15:02:07,217 - INFO - Using boundary condition `auto_periodic_neumann` for operator `laplace` in PDE for `v`
+2024-05-21 15:02:07,217 - INFO - RHS for `v` has signature ('u', 'v', 't', 'none', 'bc_args')
+2024-05-21 15:02:07,217 - INFO - Compile `_heaviside_implemention` with parallel=False
+2024-05-21 15:02:07,217 - INFO - Parse sympy expression `-u**2*v + 2*u + laplace(v, none, bc_args)`
+2024-05-21 15:02:07,220 - INFO - Compile `_lambdifygenerated` with parallel=False
+2024-05-21 15:02:07,220 - INFO - Compile `rhs_func` with parallel=False
+2024-05-21 15:02:07,220 - INFO - Compile `rhs_func` with parallel=False
+2024-05-21 15:02:07,220 - INFO - Compile `wrap` with parallel=False
+2024-05-21 15:02:07,220 - INFO - Compile `wrap` with parallel=False
+2024-05-21 15:02:07,220 - INFO - Compile `evolution_rate` with parallel=False
+2024-05-21 15:02:07,228 - INFO - Using boundary condition `auto_periodic_neumann` for operator `laplace` in PDE for `u`
+2024-05-21 15:02:07,228 - INFO - RHS for `u` has signature ('u', 'v', 't', 'none', 'bc_args')
+2024-05-21 15:02:07,228 - INFO - Parse sympy expression `u**2*v - 3*u + laplace(u, none, bc_args) + 1`
+2024-05-21 15:02:07,244 - INFO - Using boundary condition `auto_periodic_neumann` for operator `laplace` in PDE for `v`
+2024-05-21 15:02:07,244 - INFO - RHS for `v` has signature ('u', 'v', 't', 'none', 'bc_args')
+2024-05-21 15:02:07,244 - INFO - Parse sympy expression `-u**2*v + 2*u + laplace(v, none, bc_args)`
+2024-05-21 15:02:25,530 - INFO - Init explicit Euler stepper with dt=1e-05
+2024-05-21 15:02:25,530 - INFO - Compile `modify_after_step` with parallel=False

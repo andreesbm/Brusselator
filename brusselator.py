@@ -7,39 +7,40 @@ from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
 import logging
 import colorlog
 
-# Configure logging
-log_file = 'processing.log'
+def setup_logging(render_dir):
+    """Set up logging to file and console with color."""
+    log_file = os.path.join(render_dir, 'processing.log')
 
-# Create a logger object
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+    # Create a logger object
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
 
-# Create handlers
-file_handler = logging.FileHandler(log_file)
-file_handler.setLevel(logging.INFO)
+    # Create handlers
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
 
-console_handler = colorlog.StreamHandler()
-console_handler.setLevel(logging.ERROR)
+    console_handler = colorlog.StreamHandler()
+    console_handler.setLevel(logging.ERROR)
 
-# Create formatters
-file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_formatter = colorlog.ColoredFormatter(
-    '%(log_color)s%(asctime)s - %(levelname)s - %(message)s',
-    log_colors={
-        'ERROR': 'red',
-        'WARNING': 'yellow',
-        'INFO': 'green',
-        'DEBUG': 'blue'
-    }
-)
+    # Create formatters
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_formatter = colorlog.ColoredFormatter(
+        '%(log_color)s%(asctime)s - %(levelname)s - %(message)s',
+        log_colors={
+            'ERROR': 'red',
+            'WARNING': 'yellow',
+            'INFO': 'green',
+            'DEBUG': 'blue'
+        }
+    )
 
-# Add formatters to handlers
-file_handler.setFormatter(file_formatter)
-console_handler.setFormatter(console_formatter)
+    # Add formatters to handlers
+    file_handler.setFormatter(file_formatter)
+    console_handler.setFormatter(console_formatter)
 
-# Add handlers to logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
 def write_settings_to_file(settings, render_dir):
     """Write settings to a text file."""
@@ -51,20 +52,20 @@ def write_settings_to_file(settings, render_dir):
 def check_for_invalid_values(state_data, title, time_point):
     """Check for invalid values in the state data."""
     if np.isnan(state_data).any() or np.isinf(state_data).any():
-        logger.error(f"Invalid values encountered in mode {title} at time {time_point}.")
+        logging.error(f"Invalid values encountered in mode {title} at time {time_point}.")
         return True
     return False
 
 def print_debug_info(state_data, title, time_point):
     """Print debug information for state data."""
-    logger.debug(f"Debug info for mode {title} at time {time_point}:")
-    logger.debug(f"Min value: {np.min(state_data)}, Max value: {np.max(state_data)}")
-    logger.debug(f"Mean value: {np.mean(state_data)}, Std dev: {np.std(state_data)}")
+    logging.debug(f"Debug info for mode {title} at time {time_point}:")
+    logging.debug(f"Min value: {np.min(state_data)}, Max value: {np.max(state_data)}")
+    logging.debug(f"Mean value: {np.mean(state_data)}, Std dev: {np.std(state_data)}")
 
 # Load settings from external JSON file
 with open('settings.json', 'r') as f:
     settings = json.load(f)
-logger.info("Settings loaded successfully.")
+logging.info("Settings loaded successfully.")
 
 # Constants from settings
 RESOLUTION = settings["resolution"]
@@ -84,18 +85,22 @@ modes = settings["modes"]
 # Create results directory
 results_dir = 'results'
 os.makedirs(results_dir, exist_ok=True)
-logger.info(f"Results directory created at {results_dir}")
+logging.info(f"Results directory created at {results_dir}")
 
 # Determine the next render number
 render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit()]
 render_number = max(render_numbers, default=0) + 1
 render_dir = os.path.join(results_dir, str(render_number))
 os.makedirs(render_dir, exist_ok=True)
-logger.info(f"Render directory created at {render_dir}")
+logging.info(f"Render directory created at {render_dir}")
+
+# Set up logging
+setup_logging(render_dir)
+logging.info(f"Logging initialized. Logs will be saved to {os.path.join(render_dir, 'processing.log')}")
 
 # Save settings to file before starting any processing
 write_settings_to_file(settings, render_dir)
-logger.info(f"Settings saved to {render_dir}")
+logging.info(f"Settings saved to {os.path.join(render_dir, 'settings.txt')}")
 
 storage_dict = {}  # Store the MemoryStorage objects for each mode
 
@@ -110,7 +115,7 @@ for mode in modes:
     filename = mode["filename"]
     description = mode["description"]
 
-    logger.info(f"Starting mode {title}")
+    logging.info(f"Starting mode {title}")
 
     # Define the PDE
     eq = PDE(
@@ -140,7 +145,7 @@ for mode in modes:
 
     frames_dir = os.path.join(render_dir, f'frames_{title.replace(" ", "_").lower()}')
     os.makedirs(frames_dir, exist_ok=True)
-    logger.debug(f"Frames directory created for mode {title} at {frames_dir}")
+    logging.debug(f"Frames directory created for mode {title} at {frames_dir}")
 
     storage = MemoryStorage()
 
@@ -151,7 +156,7 @@ for mode in modes:
                 print_debug_info(state_data.data, title, time_point)
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
     except (RuntimeWarning, ValueError) as e:
-        logger.error(f"Warning or error encountered in mode {title}: {e}")
+        logging.error(f"Warning or error encountered in mode {title}: {e}")
         continue
 
     storage_dict[title] = list(storage.items())
@@ -185,14 +190,14 @@ for mode in modes:
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
         plt.savefig(frame_path, bbox_inches='tight', dpi=150)
         plt.close(fig)
-        logger.debug(f"Saved frame {frame_idx} at time {time}")
+        logging.info(f"Saved frame {frame_idx} at time {time}")
 
         if width is None or height is None:
             first_frame = cv2.imread(frame_path)
             if first_frame is not None:
                 height, width, layers = first_frame.shape
 
-    logger.info(f"Finished processing mode {title}")
+    logging.info(f"Finished processing mode {title}")
 
     video_path = os.path.join(render_dir, filename)
 
@@ -208,12 +213,12 @@ for mode in modes:
     for frame_file in frame_files:
         frame = cv2.imread(os.path.join(frames_dir, frame_file))
         if frame is None:
-            logger.warning(f"Error reading frame {frame_file}. Skipping.")
+            logging.warning(f"Error reading frame {frame_file}. Skipping.")
             continue
         out.write(frame)
 
     out.release()
-    logger.info(f"Video saved to {video_path}")
+    logging.info(f"Video saved to {video_path}")
 
 grid_video_path = os.path.join(render_dir, 'overview_phases.mp4')
 out_grid = cv2.VideoWriter(grid_video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, (2 * width, 2 * height))
@@ -229,7 +234,7 @@ for frame_idx in range(num_frames):
         frame = cv2.imread(frame_path)
 
         if frame is None:
-            logger.warning(f"Error reading frame {frame_path}. Skipping.")
+            logging.warning(f"Error reading frame {frame_path}. Skipping.")
             continue
 
         if i == 0:
@@ -244,7 +249,7 @@ for frame_idx in range(num_frames):
     out_grid.write(combined_frame)
 
 out_grid.release()
-logger.info(f"Overview video saved to {grid_video_path}")
+logging.info(f"Overview video saved to {grid_video_path}")
 
 write_settings_to_file(settings, render_dir)
-logger.info(f"Settings saved to {render_dir}")
+logging.info(f"Settings saved to {os.path.join(render_dir, 'settings.txt')}")
