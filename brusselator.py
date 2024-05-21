@@ -23,8 +23,8 @@ V_COLOR = settings["v_color"]
 modes = settings["modes"]
 
 # Calculate total simulation time and time step
-T_MAX = NUM_OSCILLATIONS * OSCILLATION_PERIOD
-DT = OSCILLATION_PERIOD / (FRAME_RATE * 2)  # Time step to get smooth frames for video
+T_MAX = 400
+DT = 0.001  # Time step to get smooth frames for video
 
 # Create results directory
 results_dir = 'results'
@@ -157,8 +157,8 @@ for mode in modes:
     print(f"Video saved to {video_path}")
 
 # Create a video with a 2x2 grid of the four modes
-grid_video_path = os.path.join(render_dir, 'overview_phases.avi')
-out_grid = cv2.VideoWriter(grid_video_path, cv2.VideoWriter_fourcc(*'XVID'), FRAME_RATE, (2 * width, 2 * height))
+grid_video_path = os.path.join(render_dir, 'overview_phases.mp4')
+out_grid = cv2.VideoWriter(grid_video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, (2 * width, 2 * height))
 
 num_frames = len(storage_dict[modes[0]["title"]])
 
