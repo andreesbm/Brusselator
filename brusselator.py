@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
 import logging
 import colorlog
+from multiprocessing import Pool
 
 def setup_logging(render_dir):
     """Set up logging to file and console with color."""
@@ -62,51 +63,7 @@ def print_debug_info(state_data, title, time_point):
     logging.debug(f"Min value: {np.min(state_data)}, Max value: {np.max(state_data)}")
     logging.debug(f"Mean value: {np.mean(state_data)}, Std dev: {np.std(state_data)}")
 
-# Load settings from external JSON file
-with open('settings.json', 'r') as f:
-    settings = json.load(f)
-logging.info("Settings loaded successfully.")
-
-# Constants from settings
-RESOLUTION = settings["resolution"]
-FRAME_RATE = settings["frame_rate"]
-T_MAX = settings["t_max"]
-DT = settings["dt"] / 100  # Further reduce the time step to improve stability
-COLOR_VMIN = settings["color_vmin"]
-COLOR_VMAX = settings["color_vmax"]
-U_COLOR = settings["u_color"]
-V_COLOR = settings["v_color"]
-FIXED_BOUNDARY = settings["fixed_boundary"]
-ZOOM_FACTOR = settings["zoom_factor"]
-
-# Modes from settings
-modes = settings["modes"]
-
-# Create results directory
-results_dir = 'results'
-os.makedirs(results_dir, exist_ok=True)
-logging.info(f"Results directory created at {results_dir}")
-
-# Determine the next render number
-render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit()]
-render_number = max(render_numbers, default=0) + 1
-render_dir = os.path.join(results_dir, str(render_number))
-os.makedirs(render_dir, exist_ok=True)
-logging.info(f"Render directory created at {render_dir}")
-
-# Set up logging
-setup_logging(render_dir)
-logging.info(f"Logging initialized. Logs will be saved to {os.path.join(render_dir, 'processing.log')}")
-
-# Save settings to file before starting any processing
-write_settings_to_file(settings, render_dir)
-logging.info(f"Settings saved to {os.path.join(render_dir, 'settings.txt')}")
-
-storage_dict = {}  # Store the MemoryStorage objects for each mode
-
-width, height = None, None  # Initialize width and height
-
-for mode in modes:
+def process_mode(mode, render_dir, settings):
     title = mode["title"]
     a = mode["a"]
     b = mode["b"]
@@ -126,8 +83,8 @@ for mode in modes:
     )
 
     # Initialize state with reflective boundary conditions
-    RADIUS = 1 / ZOOM_FACTOR
-    grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [RESOLUTION, RESOLUTION], periodic=not FIXED_BOUNDARY)
+    RADIUS = 1 / settings["ZOOM_FACTOR"]
+    grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [settings["RESOLUTION"], settings["RESOLUTION"]], periodic=not settings["FIXED_BOUNDARY"])
 
     u = ScalarField(grid, a, label="Field $u$")
     v = b / a + 0.1 * ScalarField.random_normal(grid, label="Field $v$")
@@ -135,9 +92,9 @@ for mode in modes:
     center = (grid.shape[0] // 2, grid.shape[1] // 2)
     Y, X = np.ogrid[:grid.shape[0], :grid.shape[1]]
     dist_from_center = np.sqrt((X - center[1]) ** 2 + (Y - center[0]) ** 2)
-    circular_mask = dist_from_center <= (RADIUS * (RESOLUTION / (2 * RADIUS)))
+    circular_mask = dist_from_center <= (RADIUS * (settings["RESOLUTION"] / (2 * RADIUS)))
 
-    if FIXED_BOUNDARY:
+    if settings["FIXED_BOUNDARY"]:
         u.data[~circular_mask] = 0
         v.data[~circular_mask] = 0
 
@@ -150,26 +107,27 @@ for mode in modes:
     storage = MemoryStorage()
 
     try:
-        sol = eq.solve(state, t_range=T_MAX, dt=DT, tracker=storage.tracker(interval=1))
+        sol = eq.solve(state, t_range=settings["T_MAX"], dt=settings["DT"], tracker=storage.tracker(interval=1))
         for time_point, state_data in storage.items():
             if check_for_invalid_values(state_data.data, title, time_point):
                 print_debug_info(state_data.data, title, time_point)
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
     except (RuntimeWarning, ValueError) as e:
         logging.error(f"Warning or error encountered in mode {title}: {e}")
-        continue
+        return
 
-    storage_dict[title] = list(storage.items())
+    storage_dict = list(storage.items())
+    width, height = None, None
 
-    for frame_idx, (time, state) in enumerate(storage_dict[title]):
+    for frame_idx, (time, state) in enumerate(storage_dict):
         fig, ax = plt.subplots(figsize=(8, 8))
 
         u_data = np.ma.masked_where(~circular_mask, state[0].data)
         v_data = np.ma.masked_where(~circular_mask, state[1].data)
 
-        u_plot = ax.imshow(u_data, cmap=U_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
+        u_plot = ax.imshow(u_data, cmap=settings["U_COLOR"], alpha=0.6, vmin=settings["COLOR_VMIN"], vmax=settings["COLOR_VMAX"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
-        v_plot = ax.imshow(v_data, cmap=V_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
+        v_plot = ax.imshow(v_data, cmap=settings["V_COLOR"], alpha=0.6, vmin=settings["COLOR_VMIN"], vmax=settings["COLOR_VMAX"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
         cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.12)
         cbar_u.ax.set_ylabel('Compound X', labelpad=10)
@@ -190,7 +148,7 @@ for mode in modes:
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
         plt.savefig(frame_path, bbox_inches='tight', dpi=150)
         plt.close(fig)
-        logging.info(f"Saved frame {frame_idx} at time {time}")
+        logging.info(f"Saved frame {frame_idx} for mode {title} at time {time}")
 
         if width is None or height is None:
             first_frame = cv2.imread(frame_path)
@@ -207,7 +165,7 @@ for mode in modes:
     height, width, layers = first_frame.shape
     frame_size = (width, height)
 
-    out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, frame_size)
+    out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), settings["FRAME_RATE"], frame_size)
 
     frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith('.png')])
     for frame_file in frame_files:
@@ -220,36 +178,64 @@ for mode in modes:
     out.release()
     logging.info(f"Video saved to {video_path}")
 
-grid_video_path = os.path.join(render_dir, 'overview_phases.mp4')
-out_grid = cv2.VideoWriter(grid_video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, (2 * width, 2 * height))
+def main():
+    # Load settings from external JSON file
+    with open('settings.json', 'r') as f:
+        settings = json.load(f)
 
-num_frames = len(storage_dict[modes[0]["title"]])
+    # Extract constants from settings
+    RESOLUTION = settings["resolution"]
+    FRAME_RATE = settings["frame_rate"]
+    T_MAX = settings["t_max"]
+    DT = settings["dt"] / 100  # Further reduce the time step to improve stability
+    COLOR_VMIN = settings["color_vmin"]
+    COLOR_VMAX = settings["color_vmax"]
+    U_COLOR = settings["u_color"]
+    V_COLOR = settings["v_color"]
+    FIXED_BOUNDARY = settings["fixed_boundary"]
+    ZOOM_FACTOR = settings["zoom_factor"]
 
-for frame_idx in range(num_frames):
-    combined_frame = np.zeros((2 * height, 2 * width, 3), dtype=np.uint8)
+    # Update settings dictionary with extracted constants
+    settings.update({
+        "RESOLUTION": RESOLUTION,
+        "FRAME_RATE": FRAME_RATE,
+        "T_MAX": T_MAX,
+        "DT": DT,
+        "COLOR_VMIN": COLOR_VMIN,
+        "COLOR_VMAX": COLOR_VMAX,
+        "U_COLOR": U_COLOR,
+        "V_COLOR": V_COLOR,
+        "FIXED_BOUNDARY": FIXED_BOUNDARY,
+        "ZOOM_FACTOR": ZOOM_FACTOR
+    })
 
-    for i, mode in enumerate(modes):
-        frames_dir = os.path.join(render_dir, f'frames_{mode["title"].replace(" ", "_").lower()}')
-        frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
-        frame = cv2.imread(frame_path)
+    # Create results directory
+    results_dir = 'results'
+    os.makedirs(results_dir, exist_ok=True)
 
-        if frame is None:
-            logging.warning(f"Error reading frame {frame_path}. Skipping.")
-            continue
+    # Determine the next render number
+    render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit()]
+    render_number = max(render_numbers, default=0) + 1
+    render_dir = os.path.join(results_dir, str(render_number))
+    os.makedirs(render_dir, exist_ok=True)
+    logging.info(f"Created results directory: {render_dir}")
 
-        if i == 0:
-            combined_frame[0:height, 0:width] = frame
-        elif i == 1:
-            combined_frame[0:height, width:2 * width] = frame
-        elif i == 2:
-            combined_frame[height:2 * height, 0:width] = frame
-        elif i == 3:
-            combined_frame[height:2 * height, width:2 * width] = frame
+    # Set up logging
+    setup_logging(render_dir)
+    logging.info("Logging configured")
 
-    out_grid.write(combined_frame)
+    # Save settings to file before starting any processing
+    write_settings_to_file(settings, render_dir)
+    logging.info(f"Settings saved to {os.path.join(render_dir, 'settings.txt')}")
 
-out_grid.release()
-logging.info(f"Overview video saved to {grid_video_path}")
+    # Process modes in parallel
+    pool = Pool()
+    results = [pool.apply_async(process_mode, (mode, render_dir, settings)) for mode in settings["modes"]]
+    pool.close()
+    pool.join()
 
-write_settings_to_file(settings, render_dir)
-logging.info(f"Settings saved to {os.path.join(render_dir, 'settings.txt')}")
+    logging.info(f"All modes processed.")
+
+if __name__ == "__main__":
+    main()
+
