@@ -139,3 +139,8 @@
 2024-05-21 15:02:07,244 - INFO - Parse sympy expression `-u**2*v + 2*u + laplace(v, none, bc_args)`
 2024-05-21 15:02:25,530 - INFO - Init explicit Euler stepper with dt=1e-05
 2024-05-21 15:02:25,530 - INFO - Compile `modify_after_step` with parallel=False
+2024-05-21 15:07:24,286 - INFO - Simulation finished at t=10.0.
+2024-05-21 15:07:33,712 - INFO - Finished processing mode Critical Point (Threshold of Oscillations)
+2024-05-21 15:07:34,424 - INFO - Video saved to results\18\critical_point.mp4
+2024-05-21 15:07:36,030 - INFO - Overview video saved to results\18\overview_phases.mp4
+2024-05-21 15:07:36,030 - INFO - Settings saved to results\18
