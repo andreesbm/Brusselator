@@ -8,12 +8,19 @@ from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
 
 def write_settings_to_file(settings, render_dir, computation_time):
     """Write settings and computation time to a text file."""
-    settings_path = os.path.join(render_dir, 'settings_and_time.txt')
+    settings_path = os.path.join(render_dir, 'log.txt')
     with open(settings_path, 'w') as f:
         f.write("Settings:\n")
         json.dump(settings, f, indent=4)
         f.write("\n\nComputation Time:\n")
         f.write(f"{computation_time:.2f} seconds\n")
+
+def check_for_invalid_values(state_data, title):
+    """Check for invalid values in the state data."""
+    if np.isnan(state_data).any() or np.isinf(state_data).any():
+        print(f"Invalid values encountered in mode {title}.")
+        return True
+    return False
 
 # Load settings from external JSON file
 with open('settings.json', 'r') as f:
@@ -99,8 +106,11 @@ for mode in modes:
     # Simulate the PDE with storage tracker
     try:
         sol = eq.solve(state, t_range=T_MAX, dt=DT, tracker=storage.tracker(interval=1))
-    except RuntimeWarning as e:
-        print(f"Warning encountered: {e}")
+        for time_point, state_data in storage.items():
+            if check_for_invalid_values(state_data.data, title):
+                raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
+    except (RuntimeWarning, ValueError) as e:
+        print(f"Warning or error encountered: {e}")
         continue
     
     storage_dict[title] = list(storage.items())  # Store the items in a list
