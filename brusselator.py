@@ -13,11 +13,11 @@ def setup_logging(render_dir):
 
     # Create a logger object
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     # Create handlers
     file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.INFO)
 
     # Create formatter
     file_formatter = logging.Formatter('%(asctime)s - %(message)s')
@@ -77,7 +77,7 @@ def process_frame(frame_data):
     plt.savefig(frame_path, bbox_inches='tight', dpi=150)
     plt.close(fig)
     
-    logging.info(f"Plot saved for frame {frame_idx} for mode {title}")
+    logging.info(f"Frame {frame_idx} saved for mode {title}")
 
     return frame_path
 
@@ -125,7 +125,6 @@ def process_mode(mode, render_dir, settings):
         for time_point, state_data in storage.items():
             if check_for_invalid_values(state_data.data, title, time_point):
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
-            logging.info(f"Computing plot for t = {time_point}")
     except (RuntimeWarning, ValueError) as e:
         logging.error(f"Warning or error encountered in mode {title}: {e}")
         return
