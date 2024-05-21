@@ -1,6 +1,6 @@
 {
     "resolution": 128,
-    "frame_rate": 24,
+    "frame_rate": 5,
     "t_max": 10,
     "dt": 0.001,
     "color_vmin": 0,
