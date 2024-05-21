@@ -8,7 +8,7 @@
     "u_color": "Reds",
     "v_color": "Blues",
     "fixed_boundary": true,
-    "zoom_factor": 1,
+    "zoom_factor": 0.01,
     "modes": [
       {
         "title": "Oscillatory Behavior (Hopf Bifurcation)",
