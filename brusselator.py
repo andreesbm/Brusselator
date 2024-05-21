@@ -12,19 +12,16 @@ with open('settings.json', 'r') as f:
 # Constants from settings
 RESOLUTION = settings["resolution"]
 FRAME_RATE = settings["frame_rate"]
-OSCILLATION_PERIOD = settings["oscillation_period"]
-NUM_OSCILLATIONS = settings["num_oscillations"]
+T_MAX = settings["t_max"]
+DT = settings["dt"]
 COLOR_VMIN = settings["color_vmin"]
 COLOR_VMAX = settings["color_vmax"]
 U_COLOR = settings["u_color"]
 V_COLOR = settings["v_color"]
+FIXED_BOUNDARY = settings["fixed_boundary"]
 
 # Modes from settings
 modes = settings["modes"]
-
-# Calculate total simulation time and time step
-T_MAX = 400
-DT = 0.001  # Time step to get smooth frames for video
 
 # Create results directory
 results_dir = 'results'
@@ -58,7 +55,7 @@ for mode in modes:
 
     # Initialize state with reflective boundary conditions
     RADIUS = RESOLUTION // 2
-    grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [RESOLUTION, RESOLUTION], periodic=False)
+    grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [RESOLUTION, RESOLUTION], periodic=not FIXED_BOUNDARY)
 
     # Create initial fields
     u = ScalarField(grid, a, label="Field $u$")
@@ -67,12 +64,13 @@ for mode in modes:
     # Create a circular mask for the Dirichlet boundary condition
     center = (grid.shape[0] // 2, grid.shape[1] // 2)
     Y, X = np.ogrid[:grid.shape[0], :grid.shape[1]]
-    dist_from_center = np.sqrt((X - center[1])**2 + (Y - center[0])**2)
+    dist_from_center = np.sqrt((X - center[1]) ** 2 + (Y - center[0]) ** 2)
     circular_mask = dist_from_center <= RADIUS
 
     # Apply the mask to enforce the Dirichlet boundary conditions
-    u.data[~circular_mask] = 0
-    v.data[~circular_mask] = 0
+    if FIXED_BOUNDARY:
+        u.data[~circular_mask] = 0
+        v.data[~circular_mask] = 0
 
     # Create a state collection
     state = FieldCollection([u, v])
@@ -91,38 +89,38 @@ for mode in modes:
     # Save each state as an image
     for frame_idx, (time, state) in enumerate(storage_dict[title]):
         fig, ax = plt.subplots(figsize=(8, 8))
-        
+
         # Apply the circular mask to the data
         u_data = np.ma.masked_where(~circular_mask, state[0].data)
         v_data = np.ma.masked_where(~circular_mask, state[1].data)
-        
+
         # Plot the u field with the specified colormap
         u_plot = ax.imshow(u_data, cmap=U_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
-        
+
         # Plot the v field with the specified colormap
         v_plot = ax.imshow(v_data, cmap=V_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
-        
+
         # Add colorbars with labels below
-        cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.08)
+        cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.12)
         cbar_u.ax.set_ylabel('Compound X', labelpad=10)
-        
-        cbar_v = plt.colorbar(v_plot, ax=ax, fraction=0.046, pad=0.14)
+
+        cbar_v = plt.colorbar(v_plot, ax=ax, fraction=0.046, pad=0.22)
         cbar_v.ax.set_ylabel('Compound Y', labelpad=10)
-        
+
         # Set title
-        plt.title(title)
-        
+        plt.title(title, fontweight='bold')
+
         # Set axis labels
         ax.set_xlabel('x')
         ax.set_ylabel('y')
-        
+
         # Add parameters text in a box at the bottom left within the plot with distance from axes
         params_text = f'a = {a}\nb = {b}\nd0 = {d0}\nd1 = {d1}'
-        ax.text(-RADIUS + 5, -RADIUS + 5, params_text, ha='left', va='bottom', 
+        ax.text(-RADIUS + 5, -RADIUS + 5, params_text, ha='left', va='bottom',
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
-        
-        # Add description below the plot with a margin of 10 pixels
-        plt.figtext(0.5, 0.02, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
+
+        # Add description below the plot with a margin of 20 pixels
+        plt.figtext(0.5, 0.04, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
         # Save the frame
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
@@ -164,16 +162,16 @@ num_frames = len(storage_dict[modes[0]["title"]])
 
 for frame_idx in range(num_frames):
     combined_frame = np.zeros((2 * height, 2 * width, 3), dtype=np.uint8)
-    
+
     for i, mode in enumerate(modes):
         frames_dir = os.path.join(render_dir, f'frames_{mode["title"].replace(" ", "_").lower()}')
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
         frame = cv2.imread(frame_path)
-        
+
         if frame is None:
             print(f"Error reading frame {frame_path}. Skipping.")
             continue
-        
+
         if i == 0:
             combined_frame[0:height, 0:width] = frame
         elif i == 1:

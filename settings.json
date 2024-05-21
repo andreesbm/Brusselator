@@ -1,12 +1,13 @@
 {
-    "resolution": 512,
+    "resolution": 128,
     "frame_rate": 24,
-    "oscillation_period": 10,
-    "num_oscillations": 100,
+    "t_max": 100,
+    "dt": 0.0001,
     "color_vmin": 0,
     "color_vmax": 3,
     "u_color": "Reds",
     "v_color": "Blues",
+    "fixed_boundary": true,
     "modes": [
       {
         "title": "Stable Steady State",
