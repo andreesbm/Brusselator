@@ -161,6 +161,48 @@ def process_mode(mode, render_dir, settings):
     out.release()
     logging.info(f"Video saved to {video_path}")
 
+    return frame_paths
+
+def create_overview_video(modes, render_dir, settings):
+    if len(modes) != 4:
+        logging.info("Overview video creation skipped because the number of modes is not 4")
+        return
+
+    logging.info("Creating overview video")
+    
+    # Process all modes and collect their frame paths
+    all_frame_paths = []
+    for mode in modes:
+        frame_paths = process_mode(mode, render_dir, settings)
+        all_frame_paths.append(frame_paths)
+    
+    # Assume all modes have the same number of frames and resolution
+    frame_count = len(all_frame_paths[0])
+    first_frame = cv2.imread(all_frame_paths[0][0])
+    height, width, _ = first_frame.shape
+
+    grid_size = (2 * height, 2 * width)
+    video_path = os.path.join(render_dir, 'overview_phases.mp4')
+    out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), settings["frame_rate"], grid_size)
+
+    for frame_idx in range(frame_count):
+        frame = np.zeros((2 * height, 2 * width, 3), dtype=np.uint8)
+
+        for i, frame_paths in enumerate(all_frame_paths):
+            mode_frame = cv2.imread(frame_paths[frame_idx])
+            if mode_frame is None:
+                logging.warning(f"Error reading frame {frame_idx} of mode {modes[i]['title']}. Skipping.")
+                continue
+            
+            row = i // 2
+            col = i % 2
+            frame[row * height:(row + 1) * height, col * width:(col + 1) * width] = mode_frame
+        
+        out.write(frame)
+
+    out.release()
+    logging.info(f"Overview video saved to {video_path}")
+
 def main():
     # Load settings from external JSON file
     with open('settings.json', 'r') as f:
@@ -205,6 +247,9 @@ def main():
     # Process modes sequentially
     for mode in settings["modes"]:
         process_mode(mode, render_dir, settings)
+
+    # Create overview video if there are exactly 4 modes
+    create_overview_video(settings["modes"], render_dir, settings)
 
 if __name__ == "__main__":
     main()
