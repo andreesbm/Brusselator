@@ -5,32 +5,41 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
+import logging
 
-def write_settings_to_file(settings, render_dir, computation_time):
-    """Write settings and computation time to a text file."""
-    settings_path = os.path.join(render_dir, 'log.txt')
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def write_settings_to_file(settings, render_dir):
+    """Write settings to a text file."""
+    settings_path = os.path.join(render_dir, 'settings_and_time.txt')
     with open(settings_path, 'w') as f:
         f.write("Settings:\n")
         json.dump(settings, f, indent=4)
-        f.write("\n\nComputation Time:\n")
-        f.write(f"{computation_time:.2f} seconds\n")
 
-def check_for_invalid_values(state_data, title):
+def check_for_invalid_values(state_data, title, time_point):
     """Check for invalid values in the state data."""
     if np.isnan(state_data).any() or np.isinf(state_data).any():
-        print(f"Invalid values encountered in mode {title}.")
+        logging.error(f"Invalid values encountered in mode {title} at time {time_point}.")
         return True
     return False
+
+def print_debug_info(state_data, title, time_point):
+    """Print debug information for state data."""
+    logging.debug(f"Debug info for mode {title} at time {time_point}:")
+    logging.debug(f"Min value: {np.min(state_data)}, Max value: {np.max(state_data)}")
+    logging.debug(f"Mean value: {np.mean(state_data)}, Std dev: {np.std(state_data)}")
 
 # Load settings from external JSON file
 with open('settings.json', 'r') as f:
     settings = json.load(f)
+logging.info("Settings loaded successfully.")
 
 # Constants from settings
 RESOLUTION = settings["resolution"]
 FRAME_RATE = settings["frame_rate"]
 T_MAX = settings["t_max"]
-DT = settings["dt"]
+DT = settings["dt"] / 100  # Further reduce the time step to improve stability
 COLOR_VMIN = settings["color_vmin"]
 COLOR_VMAX = settings["color_vmax"]
 U_COLOR = settings["u_color"]
@@ -44,20 +53,18 @@ modes = settings["modes"]
 # Create results directory
 results_dir = 'results'
 os.makedirs(results_dir, exist_ok=True)
+logging.info(f"Results directory created at {results_dir}")
 
 # Determine the next render number
 render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit()]
 render_number = max(render_numbers, default=0) + 1
 render_dir = os.path.join(results_dir, str(render_number))
 os.makedirs(render_dir, exist_ok=True)
-
-# Start the computation timer
-start_time = time.time()
+logging.info(f"Render directory created at {render_dir}")
 
 storage_dict = {}  # Store the MemoryStorage objects for each mode
 
 for mode in modes:
-    # Extract parameters
     title = mode["title"]
     a = mode["a"]
     b = mode["b"]
@@ -65,6 +72,8 @@ for mode in modes:
     d1 = mode["d1"]
     filename = mode["filename"]
     description = mode["description"]
+
+    logging.info(f"Starting mode {title}")
 
     # Define the PDE
     eq = PDE(
@@ -75,115 +84,95 @@ for mode in modes:
     )
 
     # Initialize state with reflective boundary conditions
-    RADIUS = 1 / ZOOM_FACTOR  # Adjust the physical size of the grid by the zoom factor
+    RADIUS = 1 / ZOOM_FACTOR
     grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [RESOLUTION, RESOLUTION], periodic=not FIXED_BOUNDARY)
 
-    # Create initial fields
     u = ScalarField(grid, a, label="Field $u$")
     v = b / a + 0.1 * ScalarField.random_normal(grid, label="Field $v$")
 
-    # Create a circular mask for the Dirichlet boundary condition
     center = (grid.shape[0] // 2, grid.shape[1] // 2)
     Y, X = np.ogrid[:grid.shape[0], :grid.shape[1]]
     dist_from_center = np.sqrt((X - center[1]) ** 2 + (Y - center[0]) ** 2)
     circular_mask = dist_from_center <= (RADIUS * (RESOLUTION / (2 * RADIUS)))
 
-    # Apply the mask to enforce the Dirichlet boundary conditions
     if FIXED_BOUNDARY:
         u.data[~circular_mask] = 0
         v.data[~circular_mask] = 0
 
-    # Create a state collection
     state = FieldCollection([u, v])
 
-    # Directory to save frames
     frames_dir = os.path.join(render_dir, f'frames_{title.replace(" ", "_").lower()}')
     os.makedirs(frames_dir, exist_ok=True)
+    logging.debug(f"Frames directory created for mode {title} at {frames_dir}")
 
-    # Create a MemoryStorage object to store the simulation state
     storage = MemoryStorage()
 
-    # Simulate the PDE with storage tracker
     try:
         sol = eq.solve(state, t_range=T_MAX, dt=DT, tracker=storage.tracker(interval=1))
         for time_point, state_data in storage.items():
-            if check_for_invalid_values(state_data.data, title):
+            if check_for_invalid_values(state_data.data, title, time_point):
+                print_debug_info(state_data.data, title, time_point)
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
     except (RuntimeWarning, ValueError) as e:
-        print(f"Warning or error encountered: {e}")
+        logging.error(f"Warning or error encountered in mode {title}: {e}")
         continue
-    
-    storage_dict[title] = list(storage.items())  # Store the items in a list
 
-    # Save each state as an image
+    storage_dict[title] = list(storage.items())
+
     for frame_idx, (time, state) in enumerate(storage_dict[title]):
         fig, ax = plt.subplots(figsize=(8, 8))
 
-        # Apply the circular mask to the data
         u_data = np.ma.masked_where(~circular_mask, state[0].data)
         v_data = np.ma.masked_where(~circular_mask, state[1].data)
 
-        # Plot the u field with the specified colormap
         u_plot = ax.imshow(u_data, cmap=U_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
-        # Plot the v field with the specified colormap
         v_plot = ax.imshow(v_data, cmap=V_COLOR, alpha=0.6, vmin=COLOR_VMIN, vmax=COLOR_VMAX, extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
-        # Add colorbars with labels below
         cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.12)
         cbar_u.ax.set_ylabel('Compound X', labelpad=10)
 
         cbar_v = plt.colorbar(v_plot, ax=ax, fraction=0.046, pad=0.22)
         cbar_v.ax.set_ylabel('Compound Y', labelpad=10)
 
-        # Set title
         plt.title(title, fontweight='bold')
-
-        # Set axis labels
         ax.set_xlabel('x')
         ax.set_ylabel('y')
 
-        # Add parameters text in a box at the bottom left within the plot with distance from axes
         params_text = f'a = {a}\nb = {b}\nd0 = {d0}\nd1 = {d1}'
         ax.text(-RADIUS + 0.05, -RADIUS + 0.05, params_text, ha='left', va='bottom',
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
-        # Add description below the plot with a margin of 20 pixels
         plt.figtext(0.5, 0.06, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
-        # Save the frame
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
         plt.savefig(frame_path, bbox_inches='tight', dpi=150)
         plt.close(fig)
-        print(f"Saved frame {frame_idx} at time {time}")
+        logging.debug(f"Saved frame {frame_idx} at time {time}")
 
-    # Custom directory to save the video file
+    logging.info(f"Finished processing mode {title}")
+
     video_path = os.path.join(render_dir, filename)
 
-    # Compile frames into a video
     first_frame = cv2.imread(os.path.join(frames_dir, 'frame_0000.png'))
     if first_frame is None:
         raise ValueError("First frame not found. Check if the frames are being saved correctly.")
     height, width, layers = first_frame.shape
     frame_size = (width, height)
 
-    # Initialize video writer
     out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, frame_size)
 
-    # Write frames to video
     frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith('.png')])
     for frame_file in frame_files:
         frame = cv2.imread(os.path.join(frames_dir, frame_file))
         if frame is None:
-            print(f"Error reading frame {frame_file}. Skipping.")
+            logging.warning(f"Error reading frame {frame_file}. Skipping.")
             continue
         out.write(frame)
 
     out.release()
+    logging.info(f"Video saved to {video_path}")
 
-    print(f"Video saved to {video_path}")
-
-# Create a video with a 2x2 grid of the four modes
 grid_video_path = os.path.join(render_dir, 'overview_phases.mp4')
 out_grid = cv2.VideoWriter(grid_video_path, cv2.VideoWriter_fourcc(*'mp4v'), FRAME_RATE, (2 * width, 2 * height))
 
@@ -198,7 +187,7 @@ for frame_idx in range(num_frames):
         frame = cv2.imread(frame_path)
 
         if frame is None:
-            print(f"Error reading frame {frame_path}. Skipping.")
+            logging.warning(f"Error reading frame {frame_path}. Skipping.")
             continue
 
         if i == 0:
@@ -213,12 +202,7 @@ for frame_idx in range(num_frames):
     out_grid.write(combined_frame)
 
 out_grid.release()
+logging.info(f"Overview video saved to {grid_video_path}")
 
-print(f"Overview video saved to {grid_video_path}")
-
-# Stop the computation timer and calculate the total computation time
-end_time = time.time()
-computation_time = end_time - start_time
-
-# Write the settings and computation time to a text file
-write_settings_to_file(settings, render_dir, computation_time)
+write_settings_to_file(settings, render_dir)
+logging.info(f"Settings saved to {render_dir}")
