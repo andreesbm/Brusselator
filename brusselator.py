@@ -3,7 +3,17 @@ import os
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
+
+def write_settings_to_file(settings, render_dir, computation_time):
+    """Write settings and computation time to a text file."""
+    settings_path = os.path.join(render_dir, 'settings_and_time.txt')
+    with open(settings_path, 'w') as f:
+        f.write("Settings:\n")
+        json.dump(settings, f, indent=4)
+        f.write("\n\nComputation Time:\n")
+        f.write(f"{computation_time:.2f} seconds\n")
 
 # Load settings from external JSON file
 with open('settings.json', 'r') as f:
@@ -19,6 +29,7 @@ COLOR_VMAX = settings["color_vmax"]
 U_COLOR = settings["u_color"]
 V_COLOR = settings["v_color"]
 FIXED_BOUNDARY = settings["fixed_boundary"]
+ZOOM_FACTOR = settings["zoom_factor"]
 
 # Modes from settings
 modes = settings["modes"]
@@ -32,6 +43,9 @@ render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit(
 render_number = max(render_numbers, default=0) + 1
 render_dir = os.path.join(results_dir, str(render_number))
 os.makedirs(render_dir, exist_ok=True)
+
+# Start the computation timer
+start_time = time.time()
 
 storage_dict = {}  # Store the MemoryStorage objects for each mode
 
@@ -54,7 +68,7 @@ for mode in modes:
     )
 
     # Initialize state with reflective boundary conditions
-    RADIUS = RESOLUTION // 2
+    RADIUS = 1 / ZOOM_FACTOR  # Adjust the physical size of the grid by the zoom factor
     grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [RESOLUTION, RESOLUTION], periodic=not FIXED_BOUNDARY)
 
     # Create initial fields
@@ -65,7 +79,7 @@ for mode in modes:
     center = (grid.shape[0] // 2, grid.shape[1] // 2)
     Y, X = np.ogrid[:grid.shape[0], :grid.shape[1]]
     dist_from_center = np.sqrt((X - center[1]) ** 2 + (Y - center[0]) ** 2)
-    circular_mask = dist_from_center <= RADIUS
+    circular_mask = dist_from_center <= (RADIUS * (RESOLUTION / (2 * RADIUS)))
 
     # Apply the mask to enforce the Dirichlet boundary conditions
     if FIXED_BOUNDARY:
@@ -83,7 +97,12 @@ for mode in modes:
     storage = MemoryStorage()
 
     # Simulate the PDE with storage tracker
-    sol = eq.solve(state, t_range=T_MAX, dt=DT, tracker=storage.tracker(interval=1))
+    try:
+        sol = eq.solve(state, t_range=T_MAX, dt=DT, tracker=storage.tracker(interval=1))
+    except RuntimeWarning as e:
+        print(f"Warning encountered: {e}")
+        continue
+    
     storage_dict[title] = list(storage.items())  # Store the items in a list
 
     # Save each state as an image
@@ -116,11 +135,11 @@ for mode in modes:
 
         # Add parameters text in a box at the bottom left within the plot with distance from axes
         params_text = f'a = {a}\nb = {b}\nd0 = {d0}\nd1 = {d1}'
-        ax.text(-RADIUS + 5, -RADIUS + 5, params_text, ha='left', va='bottom',
+        ax.text(-RADIUS + 0.05, -RADIUS + 0.05, params_text, ha='left', va='bottom',
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
         # Add description below the plot with a margin of 20 pixels
-        plt.figtext(0.5, 0.04, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
+        plt.figtext(0.5, 0.06, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
         # Save the frame
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
@@ -186,3 +205,10 @@ for frame_idx in range(num_frames):
 out_grid.release()
 
 print(f"Overview video saved to {grid_video_path}")
+
+# Stop the computation timer and calculate the total computation time
+end_time = time.time()
+computation_time = end_time - start_time
+
+# Write the settings and computation time to a text file
+write_settings_to_file(settings, render_dir, computation_time)
