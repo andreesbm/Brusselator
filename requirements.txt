@@ -2,4 +2,5 @@ py-pde
 matplotlib==3.8.1
 numpy
 opencv-python
+colorlog
 
