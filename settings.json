@@ -1,14 +1,14 @@
 {
-    "resolution": 128,
-    "frame_rate": 5,
-    "t_max": 10,
-    "dt": 0.001,
+    "resolution": 256,
+    "frame_rate": 24,
+    "t_max": 100,
+    "dt": 0.0001,
     "color_vmin": 0,
-    "color_vmax": 5,
+    "color_vmax": 2,
     "u_color": "Reds",
     "v_color": "Blues",
     "fixed_boundary": true,
-    "zoom_factor": 0.01,
+    "zoom_factor": 0.02,
     "modes": [
       {
         "title": "Oscillatory Behavior (Hopf Bifurcation)",

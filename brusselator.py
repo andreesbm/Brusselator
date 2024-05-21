@@ -77,7 +77,7 @@ def process_frame(frame_data):
     plt.savefig(frame_path, bbox_inches='tight', dpi=150)
     plt.close(fig)
     
-    logging.info(f"Frame {frame_idx} saved for mode {title}")
+    logging.info(f"Frame {frame_idx} saved for mode {title} at {frame_path}")
 
     return frame_path
 
@@ -127,7 +127,7 @@ def process_mode(mode, render_dir, settings):
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
     except (RuntimeWarning, ValueError) as e:
         logging.error(f"Warning or error encountered in mode {title}: {e}")
-        return
+        return []
 
     storage_dict = list(storage.items())
 
@@ -163,22 +163,14 @@ def process_mode(mode, render_dir, settings):
 
     return frame_paths
 
-def create_overview_video(modes, render_dir, settings):
-    if len(modes) != 4:
-        logging.info("Overview video creation skipped because the number of modes is not 4")
-        return
-
+def create_overview_video(modes, frame_paths, render_dir, settings):
     logging.info("Creating overview video")
     
-    # Process all modes and collect their frame paths
-    all_frame_paths = []
-    for mode in modes:
-        frame_paths = process_mode(mode, render_dir, settings)
-        all_frame_paths.append(frame_paths)
-    
-    # Assume all modes have the same number of frames and resolution
-    frame_count = len(all_frame_paths[0])
-    first_frame = cv2.imread(all_frame_paths[0][0])
+    if not all(len(paths) == len(frame_paths[0]) for paths in frame_paths):
+        raise ValueError("All modes must have the same number of frames")
+
+    frame_count = len(frame_paths[0])
+    first_frame = cv2.imread(frame_paths[0][0])
     height, width, _ = first_frame.shape
 
     grid_size = (2 * height, 2 * width)
@@ -188,8 +180,10 @@ def create_overview_video(modes, render_dir, settings):
     for frame_idx in range(frame_count):
         frame = np.zeros((2 * height, 2 * width, 3), dtype=np.uint8)
 
-        for i, frame_paths in enumerate(all_frame_paths):
-            mode_frame = cv2.imread(frame_paths[frame_idx])
+        for i, paths in enumerate(frame_paths):
+            mode_frame_path = paths[frame_idx]
+            logging.info(f"Reading frame {frame_idx} for mode {modes[i]['title']} from {mode_frame_path}")
+            mode_frame = cv2.imread(mode_frame_path)
             if mode_frame is None:
                 logging.warning(f"Error reading frame {frame_idx} of mode {modes[i]['title']}. Skipping.")
                 continue
@@ -245,11 +239,14 @@ def main():
     write_settings_to_file(settings, render_dir)
 
     # Process modes sequentially
+    all_frame_paths = []
     for mode in settings["modes"]:
-        process_mode(mode, render_dir, settings)
+        frame_paths = process_mode(mode, render_dir, settings)
+        all_frame_paths.append(frame_paths)
 
     # Create overview video if there are exactly 4 modes
-    create_overview_video(settings["modes"], render_dir, settings)
+    if len(settings["modes"]) == 4:
+        create_overview_video(settings["modes"], all_frame_paths, render_dir, settings)
 
 if __name__ == "__main__":
     main()
