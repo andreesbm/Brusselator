@@ -43,43 +43,47 @@ def check_for_invalid_values(state_data, title, time_point):
     return False
 
 def process_frame(frame_data):
-    frame_idx, state, title, render_dir, circular_mask, settings, RADIUS, description, a, b, d0, d1 = frame_data
+    try:
+        frame_idx, state, title, render_dir, circular_mask, settings, RADIUS, description, a, b, d0, d1 = frame_data
 
-    frames_dir = os.path.join(render_dir, f'frames_{title.replace(" ", "_").lower()}')
-    os.makedirs(frames_dir, exist_ok=True)
-    
-    fig, ax = plt.subplots(figsize=(8, 8))
+        frames_dir = os.path.join(render_dir, f'frames_{title.replace(" ", "_").lower()}')
+        os.makedirs(frames_dir, exist_ok=True)
+        
+        fig, ax = plt.subplots(figsize=(8, 8))
 
-    u_data = np.ma.masked_where(~circular_mask, state[0].data)
-    v_data = np.ma.masked_where(~circular_mask, state[1].data)
+        u_data = np.ma.masked_where(~circular_mask, state[0].data)
+        v_data = np.ma.masked_where(~circular_mask, state[1].data)
 
-    u_plot = ax.imshow(u_data, cmap=settings["u_color"], alpha=0.6, vmin=settings["color_vmin"], vmax=settings["color_vmax"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
+        u_plot = ax.imshow(u_data, cmap=settings["u_color"], alpha=0.6, vmin=settings["color_vmin"], vmax=settings["color_vmax"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
-    v_plot = ax.imshow(v_data, cmap=settings["v_color"], alpha=0.6, vmin=settings["color_vmin"], vmax=settings["color_vmax"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
+        v_plot = ax.imshow(v_data, cmap=settings["v_color"], alpha=0.6, vmin=settings["color_vmin"], vmax=settings["color_vmax"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
-    cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.12)
-    cbar_u.ax.set_ylabel('Compound X', labelpad=10)
+        cbar_u = plt.colorbar(u_plot, ax=ax, fraction=0.046, pad=0.12)
+        cbar_u.ax.set_ylabel('Compound X', labelpad=10)
 
-    cbar_v = plt.colorbar(v_plot, ax=ax, fraction=0.046, pad=0.22)
-    cbar_v.ax.set_ylabel('Compound Y', labelpad=10)
+        cbar_v = plt.colorbar(v_plot, ax=ax, fraction=0.046, pad=0.22)
+        cbar_v.ax.set_ylabel('Compound Y', labelpad=10)
 
-    plt.title(title, fontweight='bold')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
+        plt.title(title, fontweight='bold')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
 
-    params_text = f'a = {a}\nb = {b}\nd0 = {d0}\nd1 = {d1}'
-    ax.text(-RADIUS + 0.05, -RADIUS + 0.05, params_text, ha='left', va='bottom',
-            bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
+        params_text = f'a = {a}\nb = {b}\nd0 = {d0}\nd1 = {d1}'
+        ax.text(-RADIUS + 0.05, -RADIUS + 0.05, params_text, ha='left', va='bottom',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
-    plt.figtext(0.5, 0.06, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
+        plt.figtext(0.5, 0.06, description, ha="center", fontsize=10, wrap=True, bbox=dict(facecolor='white', alpha=0.5, edgecolor='black'))
 
-    frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
-    plt.savefig(frame_path, bbox_inches='tight', dpi=150)
-    plt.close(fig)
-    
-    logging.info(f"Frame {frame_idx} saved for mode {title} at {frame_path}")
+        frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
+        plt.savefig(frame_path, bbox_inches='tight', dpi=150)
+        plt.close(fig)
+        
+        logging.info(f"Frame {frame_idx} saved for mode {title} at {frame_path}")
 
-    return frame_path
+        return frame_path
+    except Exception as e:
+        logging.error(f"Error processing frame {frame_idx} for mode {title}: {e}")
+        return None
 
 def process_mode(mode, render_dir, settings):
     title = mode["title"]
@@ -121,10 +125,13 @@ def process_mode(mode, render_dir, settings):
     storage = MemoryStorage()
 
     try:
+        logging.info(f"Solving PDE for mode {title}")
         sol = eq.solve(state, t_range=settings["t_max"], dt=settings["dt"], tracker=storage.tracker(interval=1))
+        logging.info(f"Finished solving PDE for mode {title}")
         for time_point, state_data in storage.items():
             if check_for_invalid_values(state_data.data, title, time_point):
                 raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
+            logging.info(f"Computed plot for t = {time_point}")
     except (RuntimeWarning, ValueError) as e:
         logging.error(f"Warning or error encountered in mode {title}: {e}")
         return []
@@ -136,12 +143,23 @@ def process_mode(mode, render_dir, settings):
         for frame_idx, (time, state) in enumerate(storage_dict)
     ]
 
-    with Pool(cpu_count()) as pool:
-        frame_paths = pool.map(process_frame, frame_data_list)
+    try:
+        logging.info(f"Starting frame processing for mode {title}")
+        with Pool(cpu_count()) as pool:
+            frame_paths = pool.map(process_frame, frame_data_list)
+            frame_paths = [path for path in frame_paths if path is not None]
+        logging.info(f"Finished frame processing for mode {title}")
+    except Exception as e:
+        logging.error(f"Error during frame processing for mode {title}: {e}")
+        return []
 
     logging.info(f"Finished processing mode {title}")
 
     video_path = os.path.join(render_dir, filename)
+
+    if not frame_paths:
+        logging.error(f"No frames processed for mode {title}. Skipping video creation.")
+        return []
 
     first_frame = cv2.imread(frame_paths[0])
     if first_frame is None:
@@ -163,40 +181,6 @@ def process_mode(mode, render_dir, settings):
 
     return frame_paths
 
-def create_overview_video(modes, frame_paths, render_dir, settings):
-    logging.info("Creating overview video")
-    
-    if not all(len(paths) == len(frame_paths[0]) for paths in frame_paths):
-        raise ValueError("All modes must have the same number of frames")
-
-    frame_count = len(frame_paths[0])
-    first_frame = cv2.imread(frame_paths[0][0])
-    height, width, _ = first_frame.shape
-
-    grid_size = (2 * height, 2 * width)
-    video_path = os.path.join(render_dir, 'overview_phases.mp4')
-    out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), settings["frame_rate"], grid_size)
-
-    for frame_idx in range(frame_count):
-        frame = np.zeros((2 * height, 2 * width, 3), dtype=np.uint8)
-
-        for i, paths in enumerate(frame_paths):
-            mode_frame_path = paths[frame_idx]
-            logging.info(f"Reading frame {frame_idx} for mode {modes[i]['title']} from {mode_frame_path}")
-            mode_frame = cv2.imread(mode_frame_path)
-            if mode_frame is None:
-                logging.warning(f"Error reading frame {frame_idx} of mode {modes[i]['title']}. Skipping.")
-                continue
-            
-            row = i // 2
-            col = i % 2
-            frame[row * height:(row + 1) * height, col * width:(col + 1) * width] = mode_frame
-        
-        out.write(frame)
-
-    out.release()
-    logging.info(f"Overview video saved to {video_path}")
-
 def main():
     # Load settings from external JSON file
     with open('settings.json', 'r') as f:
@@ -214,7 +198,7 @@ def main():
     RESOLUTION = settings["resolution"]
     FRAME_RATE = settings["frame_rate"]
     T_MAX = settings["t_max"]
-    DT = settings["dt"] / 100  # Further reduce the time step to improve stability
+    DT = settings["dt"] 
     COLOR_VMIN = settings["color_vmin"]
     COLOR_VMAX = settings["color_vmax"]
     U_COLOR = settings["u_color"]
@@ -239,14 +223,8 @@ def main():
     write_settings_to_file(settings, render_dir)
 
     # Process modes sequentially
-    all_frame_paths = []
     for mode in settings["modes"]:
-        frame_paths = process_mode(mode, render_dir, settings)
-        all_frame_paths.append(frame_paths)
-
-    # Create overview video if there are exactly 4 modes
-    if len(settings["modes"]) == 4:
-        create_overview_video(settings["modes"], all_frame_paths, render_dir, settings)
+        process_mode(mode, render_dir, settings)
 
 if __name__ == "__main__":
     main()
