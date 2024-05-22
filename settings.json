@@ -1,5 +1,5 @@
 {
-    "resolution": 512,
+    "resolution": 1028,
     "frame_rate": 24,
     "t_max": 120,
     "dt": 0.00001,
@@ -8,7 +8,7 @@
     "u_color": "Reds",
     "v_color": "Blues",
     "fixed_boundary": true,
-    "zoom_factor": 0.01,
+    "zoom_factor": 0.02,
     "modes": [
       {
         "title": "critical instability",
