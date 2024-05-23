@@ -11,30 +11,6 @@
     "zoom_factor": 0.02,
     "modes": [
       {
-        "title": "critical instability",
-        "a": 1.5,
-        "b": 3,
-        "d0": 1,
-        "d1": 0.111111111111,
-        "filename": "critical_instability.mp4",
-        "description": "b < (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
-      },{
-        "title": "critical stability",
-        "a": 1.5,
-        "b": 3.5,
-        "d0": 1,
-        "d1": 0.111111111111,
-        "filename": "critical_stability.mp4",
-        "description": "b > (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
-      },{
-        "title": "critical turing-hopf point",
-        "a": 1.5,
-        "b": 3.25,
-        "d0": 1,
-        "d1": 0.111111111111,
-        "filename": "critical_turing-hopf_point.mp4",
-        "description": "b = (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
-      },{
         "title": "Turing Critical Point",
         "a": 1.5,
         "b": 3.25,
@@ -86,6 +62,30 @@
         "d1": 0.1,
         "filename": "inhomogenous_instability.mp4",
         "description": "b < (a + 1)^2 , (1 + a)^2 > (an + 1)^2"
+      },{
+        "title": "critical instability",
+        "a": 1.5,
+        "b": 3,
+        "d0": 1,
+        "d1": 0.111111111111,
+        "filename": "critical_instability.mp4",
+        "description": "b < (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
+      },{
+        "title": "critical stability",
+        "a": 1.5,
+        "b": 3.5,
+        "d0": 1,
+        "d1": 0.111111111111,
+        "filename": "critical_stability.mp4",
+        "description": "b > (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
+      },{
+        "title": "critical turing-hopf point",
+        "a": 1.5,
+        "b": 3.25,
+        "d0": 1,
+        "d1": 0.111111111111,
+        "filename": "critical_turing-hopf_point.mp4",
+        "description": "b = (a + 1)^2 , (1 + a)^2 = (an + 1)^2"
       }
     ]
   }
