@@ -15,6 +15,10 @@ def setup_logging(render_dir):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
+    # Clear any existing handlers to prevent duplication
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     # Create handlers
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
@@ -76,7 +80,7 @@ def process_frame(frame_data):
 
         frame_path = os.path.join(frames_dir, f'frame_{frame_idx:04d}.png')
         plt.savefig(frame_path, bbox_inches='tight', dpi=150)
-        plt.close(fig)
+        plt.close(fig)  # Ensure the figure is closed after saving
         
         logging.info(f"Frame {frame_idx} saved for mode {title} at {frame_path}")
 
@@ -143,17 +147,13 @@ def process_mode(mode, render_dir, settings):
         for frame_idx, (time, state) in enumerate(storage_dict)
     ]
 
-    try:
-        logging.info(f"Starting frame processing for mode {title}")
-        with Pool(cpu_count()) as pool:
-            frame_paths = pool.map(process_frame, frame_data_list)
-            frame_paths = [path for path in frame_paths if path is not None]
-        logging.info(f"Finished frame processing for mode {title}")
-    except Exception as e:
-        logging.error(f"Error during frame processing for mode {title}: {e}")
-        return []
+    frame_paths = []
+    for frame_data in frame_data_list:
+        frame_path = process_frame(frame_data)
+        if frame_path:
+            frame_paths.append(frame_path)
 
-    logging.info(f"Finished processing mode {title}")
+    logging.info(f"Finished frame processing for mode {title}")
 
     video_path = os.path.join(render_dir, filename)
 
@@ -198,7 +198,7 @@ def main():
     RESOLUTION = settings["resolution"]
     FRAME_RATE = settings["frame_rate"]
     T_MAX = settings["t_max"]
-    DT = settings["dt"] 
+    DT = settings["dt"]
     COLOR_VMIN = settings["color_vmin"]
     COLOR_VMAX = settings["color_vmax"]
     U_COLOR = settings["u_color"]
@@ -218,7 +218,8 @@ def main():
 
     # Set up logging
     setup_logging(render_dir)
-
+    logging.info("Logging is set up.")
+    
     # Save settings to file before starting any processing
     write_settings_to_file(settings, render_dir)
 
