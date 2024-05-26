@@ -1,50 +1,33 @@
-import cv2
-import os
-import json
 import numpy as np
 import matplotlib.pyplot as plt
-from pde import PDE, FieldCollection, ScalarField, CartesianGrid, MemoryStorage
+import os
+import json
 import logging
+import cv2
+from pde import CartesianGrid, ScalarField
 from multiprocessing import Pool, cpu_count
 
-def setup_logging(render_dir):
-    """Set up logging to file."""
-    log_file = os.path.join(render_dir, 'processing.log')
+def T(q, a, b, d0, d1):
+    return b - 1 - np.linalg.norm(q) ** 2 * d0 - a ** 2 - np.linalg.norm(q) ** 2 * d1
 
-    # Create a logger object
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+def Delta(q, a, b, d0, d1):
+    term1 = (b - 1 - np.linalg.norm(q) ** 2 * d0)
+    term2 = (-a ** 2 - np.linalg.norm(q) ** 2 * d1)
+    return term1 * term2 + b * a ** 2
 
-    # Clear any existing handlers to prevent duplication
-    if logger.hasHandlers():
-        logger.handlers.clear()
+def omega(q, a, b, d0, d1):
+    T_q = T(q, a, b, d0, d1)
+    Delta_q = Delta(q, a, b, d0, d1)
+    discriminant = np.sqrt(complex(T_q ** 2 - 4 * Delta_q))
+    omega_plus = 0.5 * (T_q + discriminant)
+    omega_minus = 0.5 * (T_q - discriminant)
+    return omega_plus, omega_minus
 
-    # Create handlers
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
+def c_plus(q):
+    return 0.01*np.random.normal()
 
-    # Create formatter
-    file_formatter = logging.Formatter('%(asctime)s - %(message)s')
-
-    # Add formatter to handler
-    file_handler.setFormatter(file_formatter)
-
-    # Add handler to logger
-    logger.addHandler(file_handler)
-
-def write_settings_to_file(settings, render_dir):
-    """Write settings to a text file."""
-    settings_path = os.path.join(render_dir, 'settings.txt')
-    with open(settings_path, 'w') as f:
-        f.write("Settings:\n")
-        json.dump(settings, f, indent=4)
-
-def check_for_invalid_values(state_data, title, time_point):
-    """Check for invalid values in the state data."""
-    if np.isnan(state_data).any() or np.isinf(state_data).any():
-        logging.error(f"Invalid values encountered in mode {title} at time {time_point}.")
-        return True
-    return False
+def c_minus(q):
+    return 0.01*np.random.normal()
 
 def process_frame(frame_data):
     try:
@@ -55,8 +38,8 @@ def process_frame(frame_data):
         
         fig, ax = plt.subplots(figsize=(8, 8))
 
-        u_data = np.ma.masked_where(~circular_mask, state[0].data)
-        v_data = np.ma.masked_where(~circular_mask, state[1].data)
+        u_data = np.ma.masked_where(~circular_mask, state[0])
+        v_data = np.ma.masked_where(~circular_mask, state[1])
 
         u_plot = ax.imshow(u_data, cmap=settings["u_color"], alpha=0.6, vmin=settings["color_vmin"], vmax=settings["color_vmax"], extent=[-RADIUS, RADIUS, -RADIUS, RADIUS])
 
@@ -100,51 +83,37 @@ def process_mode(mode, render_dir, settings):
 
     logging.info(f"Starting mode {title}")
 
-    # Define the PDE
-    eq = PDE(
-        {
-            "u": f"{d0} * laplace(u) + {a} - ({b} + 1) * u + u**2 * v",
-            "v": f"{d1} * laplace(v) + {b} * u - u**2 * v",
-        }
-    )
-
-    # Initialize state with reflective boundary conditions
     RADIUS = 1 / settings["zoom_factor"]
     grid = CartesianGrid([[-RADIUS, RADIUS], [-RADIUS, RADIUS]], [settings["resolution"], settings["resolution"]], periodic=not settings["fixed_boundary"])
-
-    u = ScalarField(grid, a, label="Field $u$")
-    v = b / a + 0.1 * ScalarField.random_normal(grid, label="Field $v$")
-
     center = (grid.shape[0] // 2, grid.shape[1] // 2)
     Y, X = np.ogrid[:grid.shape[0], :grid.shape[1]]
     dist_from_center = np.sqrt((X - center[1]) ** 2 + (Y - center[0]) ** 2)
     circular_mask = dist_from_center <= (RADIUS * (settings["resolution"] / (2 * RADIUS)))
 
-    if settings["fixed_boundary"]:
-        u.data[~circular_mask] = 0
-        v.data[~circular_mask] = 0
+    freqs = np.fft.fftfreq(grid.shape[0], d=(2 * RADIUS) / grid.shape[0])
+    qx, qy = np.meshgrid(freqs, freqs)
+    q_vectors = np.vstack([qx.ravel(), qy.ravel()]).T
+    q_vectors = q_vectors[np.where(circular_mask.ravel())]
 
-    state = FieldCollection([u, v])
+    state_storage = []
 
-    storage = MemoryStorage()
-
-    try:
-        logging.info(f"Solving PDE for mode {title}")
-        sol = eq.solve(state, t_range=settings["t_max"], dt=settings["dt"], tracker=storage.tracker(interval=1))
-        logging.info(f"Finished solving PDE for mode {title}")
-        for time_point, state_data in storage.items():
-            if check_for_invalid_values(state_data.data, title, time_point):
-                raise ValueError(f"Invalid values encountered in mode {title} at time {time_point}.")
-            logging.info(f"Computed plot for t = {time_point}")
-    except (RuntimeWarning, ValueError) as e:
-        logging.error(f"Warning or error encountered in mode {title}: {e}")
-        return []
-
-    storage_dict = list(storage.items())
+    t_values = np.arange(0, settings["t_max"], settings["dt"])
+    for t in t_values:
+        u_data = np.ones(grid.shape)*a
+        v_data = np.ones(grid.shape)*b/a # Steady state condition
+        for q in q_vectors:
+            omega_plus, omega_minus = omega(q, a, b, d0, d1)
+            u_phase_plus = np.exp(omega_plus * t - 1j *d0* (q[0] * X + q[1] * Y))
+            v_phase_plus = np.exp(omega_plus * t - 1j *d1* (q[0] * X + q[1] * Y))
+            u_phase_minus = np.exp(omega_minus * t - 1j *d0* (q[0] * X + q[1] * Y))
+            v_phase_minus = np.exp(omega_minus * t - 1j *d1* (q[0] * X + q[1] * Y))
+            u_data += np.real(c_plus(q) * u_phase_plus + c_minus(q) *u_phase_minus)
+            v_data += np.real(c_plus(q) *v_phase_plus + c_minus(q) *v_phase_minus)
+        state_storage.append((t, [u_data, v_data]))
 
     frame_data_list = [
         (frame_idx, state, title, render_dir, circular_mask, settings, RADIUS, description, a, b, d0, d1)
-        for frame_idx, (time, state) in enumerate(storage_dict)
+        for frame_idx, (time, state) in enumerate(state_storage)
     ]
 
     frame_paths = []
@@ -182,19 +151,14 @@ def process_mode(mode, render_dir, settings):
     return frame_paths
 
 def main():
-    # Load settings from external JSON file
     with open('settings.json', 'r') as f:
         settings = json.load(f)
 
-    # Required keys
     required_keys = ["resolution", "frame_rate", "t_max", "dt", "color_vmin", "color_vmax", "u_color", "v_color", "fixed_boundary", "zoom_factor", "modes"]
-    
-    # Check for missing keys
     missing_keys = [key for key in required_keys if key not in settings]
     if missing_keys:
         raise KeyError(f"Missing required settings: {', '.join(missing_keys)}")
-    
-    # Extract constants from settings
+
     RESOLUTION = settings["resolution"]
     FRAME_RATE = settings["frame_rate"]
     T_MAX = settings["t_max"]
@@ -206,26 +170,13 @@ def main():
     FIXED_BOUNDARY = settings["fixed_boundary"]
     ZOOM_FACTOR = settings["zoom_factor"]
 
-    # Create results directory
     results_dir = 'results'
     os.makedirs(results_dir, exist_ok=True)
 
-    # Determine the next render number
-    render_numbers = [int(name) for name in os.listdir(results_dir) if name.isdigit()]
-    render_number = max(render_numbers, default=0) + 1
-    render_dir = os.path.join(results_dir, str(render_number))
-    os.makedirs(render_dir, exist_ok=True)
-
-    # Set up logging
-    setup_logging(render_dir)
-    logging.info("Logging is set up.")
-    
-    # Save settings to file before starting any processing
-    write_settings_to_file(settings, render_dir)
-
-    # Process modes sequentially
     for mode in settings["modes"]:
-        process_mode(mode, render_dir, settings)
+        frame_paths = process_mode(mode, results_dir, settings)
+        logging.info(f"Processed {len(frame_paths)} frames for mode {mode['title']}")
 
 if __name__ == "__main__":
     main()
+
